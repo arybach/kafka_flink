@@ -1,0 +1,154 @@
+version: '3'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.2.0
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - kafka-net
+
+  broker:
+    image: confluentinc/cp-kafka:7.2.0
+    hostname: broker
+    container_name: broker
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT      
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LOG_RETENTION_HOURS: 8
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1  # set the replication factor to 1
+      # KAFKA_CREATE_TOPICS: "__consumer_offsets:1:1"  # create the __consumer_offsets topic with 1 partition and a replication factor of 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=localhost"  
+    command: >
+      sh -c "
+        /etc/confluent/docker/run &
+        sleep 20 && 
+        kafka-topics --create --topic test --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server broker:29092 && 
+        wait 
+      "
+    # volumes:  # mounting creates permissions issues which are not easily resolved - data and data-delete are there kafka logs are (if need to be deleted)
+    #   - ./kafka-logs:/var/lib/kafka/data
+    #   - ./kafka-logs-delete:/var/lib/kafka/data-delete    
+    networks:
+      - kafka-net
+
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.2.0
+    hostname: control-center
+    container_name: control-center
+    depends_on:
+      - zookeeper
+      - broker
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONTROL_CENTER_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://localhost:8081"
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021  
+    networks:
+      - kafka-net
+
+  # ssl-certs-generator:
+  #   image: confluentinc/cp-enterprise-kafka:7.2.1
+  #   container_name: ssl-certs-generator
+  #   depends_on:
+  #     - zookeeper
+  #     - broker
+  #   environment:
+  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  #     KAFKA_BROKER_ID: 1
+  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker:29092,EXTERNAL://localhost:9092,SSL://localhost:9093
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: EXTERNAL:SSL,INTERNAL:PLAINTEXT
+  #     KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.keystore.jks
+  #     KAFKA_SSL_KEYSTORE_PASSWORD: password
+  #     KAFKA_SSL_KEY_PASSWORD: password
+  #     KAFKA_SSL_TRUSTSTORE_LOCATION: /etc/kafka/secrets/kafka.truststore.jks
+  #     KAFKA_SSL_TRUSTSTORE_PASSWORD: password
+  #   command: sh -c "echo \"supersecret\" > /tmp/secrets.txt && kafka-create-ssl.sh /tmp/secrets.txt && tail -f /dev/null"
+  #   volumes:
+  #     - ./settings/secrets:/etc/kafka/secrets
+  
+
+  sql-client:
+    container_name: 'sql-client'
+    build:
+      context: .
+      dockerfile: sql-client/Dockerfile
+    depends_on:
+      - jobmanager
+    environment:
+      - FLINK_JOBMANAGER_HOST=jobmanager
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        flink.kafka.client.timeout: 300000
+        akka.ask.timeout: 3000
+    volumes:
+      - ./settings/conf:/settings/conf
+      - ./data:/data # sink tables in csv, parquet or other file formats go here
+    networks:
+      - kafka-net
+
+  jobmanager:
+    image: flink:1.16.0-scala_2.12-java11
+    hostname: jobmanager
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    depends_on:
+      - zookeeper
+      - broker
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        flink.kafka.client.timeout: 300000
+        akka.ask.timeout: 3000
+        jobmanager.memory.flink.size: 8g
+    volumes: # taskmanager inherits settings from jobmanager by default (settingss are repeated in the environment settings for now)
+      - ./settings/conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+      - ./data:/data # sink tables in csv, parquet or other file formats go here
+    networks:
+      - kafka-net
+
+  taskmanager:
+    image: flink:1.16.0-scala_2.12-java11
+    hostname: taskmanager
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    scale: 1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 10
+        flink.kafka.client.timeout: 300000
+        akka.ask.timeout: 3000
+    volumes:
+      - ./data:/data # sink tables in csv, parquet or other file formats go here
+    networks:
+      - kafka-net
+
+networks:
+  kafka-net:
+    driver: bridge

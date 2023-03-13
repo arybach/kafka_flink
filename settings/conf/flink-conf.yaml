@@ -1,0 +1,37 @@
+jobmanager.rpc.address: jobmanager
+blob.server.port: 6124
+query.server.port: 6125
+taskmanager.numberOfTaskSlots: 10
+flink.kafka.client.timeout: 300000
+akka.ask.timeout: 3000
+jobmanager.memory.flink.size: 8g
+
+jobmanager.rpc.address: jobmanager
+flink.kafka.client.timeout: 300000
+akka.ask.timeout: 3000
+jobmanager.memory.flink.size: 8g
+
+
+jobmanager.rpc.address: jobmanager
+flink.kafka.client.timeout: 300000
+akka.ask.timeout: 3000
+jobmanager.memory.flink.size: 8g
+
+
+jobmanager.rpc.address: jobmanager
+flink.kafka.client.timeout: 300000
+akka.ask.timeout: 3000
+jobmanager.memory.flink.size: 8g
+
+
+jobmanager.rpc.address: jobmanager
+flink.kafka.client.timeout: 300000
+akka.ask.timeout: 3000
+jobmanager.memory.flink.size: 8g
+
+
+jobmanager.rpc.address: jobmanager
+flink.kafka.client.timeout: 300000
+akka.ask.timeout: 3000
+jobmanager.memory.flink.size: 8g
+
