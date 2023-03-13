@@ -63,7 +63,7 @@ docker exec -it sql-client /opt/sql-client/sql-client.sh
 
 % forward ports 8081 (flink), 9021 (confluent manager)
 % more detailed info below
-# SQL CLI for Apache Flink® on Docker®
+% SQL CLI for Apache Flink® on Docker®
 
 sudo chown -R 1001:root /path/to/zookeeper/data && sudo chmod -R g+rwX,o+rX,o-w /path/to/zookeeper/data
 
