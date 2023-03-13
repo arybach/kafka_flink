@@ -1,5 +1,5 @@
 % pull repo
-git clone...
+git clone https://github.com/arybach/kafka_flink.git
 
 % set env
 sudo apt install software-common-properties
